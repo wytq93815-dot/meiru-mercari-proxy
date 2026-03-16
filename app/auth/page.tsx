@@ -86,14 +86,20 @@ export default function AuthPage() {
       return;
     }
 
-    // 注册流程
+    // 注册流程：先尝试创建 Auth 用户
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
+    // signUp 失败（例如邮箱格式、已存在等）
     if (error || !data.user) {
-      setError(error?.message ?? "注册失败");
+      // 已存在用户的情况，给出更友好的提示
+      if (error?.message?.toLowerCase().includes("user already registered")) {
+        setError("该邮箱已注册，请直接使用登录。如无法登录，可先通过“忘记密码”重置。");
+      } else {
+        setError(error?.message ?? "注册失败");
+      }
       setLoading(false);
       return;
     }
@@ -102,13 +108,26 @@ export default function AuthPage() {
 
     if (role === "proxy") {
       const generatedProxyId = `PX-${nanoid(8)}`;
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: userId,
-        role: "proxy",
-        proxy_id: generatedProxyId,
-      });
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          role: "proxy",
+          proxy_id: generatedProxyId,
+        });
       if (profileError) {
-        setError(profileError.message);
+        // 如果 profile 已存在，说明之前注册流程部分成功，提示改为登录
+        if (
+          profileError.message
+            .toLowerCase()
+            .includes("duplicate key value violates unique constraint \"profiles_pkey\"")
+        ) {
+          setError(
+            "该邮箱的账户资料已存在，请直接使用登录。如无法登录，可先通过“忘记密码”重置密码。"
+          );
+        } else {
+          setError(profileError.message);
+        }
         setLoading(false);
         return;
       }
@@ -141,13 +160,25 @@ export default function AuthPage() {
 
       const proxyUserId = proxyProfile.id;
 
-      const { error: buyerProfileError } = await supabase.from("profiles").insert({
-        id: userId,
-        role: "buyer",
-        proxy_id: null,
-      });
+      const { error: buyerProfileError } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          role: "buyer",
+          proxy_id: null,
+        });
       if (buyerProfileError) {
-        setError(buyerProfileError.message);
+        if (
+          buyerProfileError.message
+            .toLowerCase()
+            .includes("duplicate key value violates unique constraint \"profiles_pkey\"")
+        ) {
+          setError(
+            "该邮箱的账户资料已存在，请直接使用登录。如无法登录，可先通过“忘记密码”重置密码。"
+          );
+        } else {
+          setError(buyerProfileError.message);
+        }
         setLoading(false);
         return;
       }
